@@ -29,6 +29,11 @@
 
   function replaceAdContainer() {
     var adContainer = document.querySelector(".GameInfo_secondMpuContainer__xiGbJ");
+
+    if (!adContainer) {
+      adContainer = document.querySelector(".GamePageDesktop_leaderboardContainer__Mmiky");
+    }
+
     if (adContainer && adContainer.parentNode) {
       adContainer.parentNode.replaceChild(
         createAdContainer('f8b69a0d52842242af61fdbcb892cc74', 468, 60),
@@ -41,4 +46,4 @@
   }
 
   replaceAdContainer();
-})();  
+})();
