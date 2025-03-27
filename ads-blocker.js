@@ -1,49 +1,97 @@
-(function(){
-  var adScript1 = document.createElement('script');
-  adScript1.type = 'text/javascript';
-  adScript1.src = '//pl26200346.effectiveratecpm.com/08/db/84/08db842da9b43ad3d13c14634f9fd1c8.js';
-  document.head.appendChild(adScript1);
+(function() {
+  const urls = [
+    "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+    "https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt",
+    "https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt",
+    "https://easylist.to/easylist/easylist.txt",
+    "https://easylist.to/easylist/easyprivacy.txt",
+  ];
 
-  var adScript2 = document.createElement('script');
-  adScript2.type = 'text/javascript';
-  adScript2.src = '//pl26200262.effectiveratecpm.com/f0/e8/15/f0e81559842363ebf19aa99900ff2d02.js';
-  document.head.appendChild(adScript2);
+  Promise.all(urls.map(url =>
+    fetch(url)
+      .then(resp => resp.text())
+      .catch(() => "")
+  )).then(responses => {
+    const blockedDomains = new Set();
+    responses.forEach(text => {
+      text.split('\n').forEach(line => {
+        line = line.trim();
+        if (!line || line.startsWith('#')) return;
+        if (line.indexOf('#') !== -1) {
+          line = line.split('#')[0].trim();
+        }
+        const parts = line.split(/\s+/);
+        let domain;
+        if (parts.length === 1) {
+          domain = parts[0];
+        } else {
+          domain = /^(0\.0\.0\.0|127\.0\.0\.1)$/.test(parts[0]) ? parts[1] : parts[0];
+        }
+        if (domain) blockedDomains.add(domain);
+      });
+    });
 
-  console.log("Ads injected.");
-
-  function createAdContainer(adKey, width, height) {
-    var container = document.createElement("div");
-
-    var script1 = document.createElement("script");
-    script1.type = "text/javascript";
-    script1.text = `atOptions = { 'key' : '${adKey}', 'format' : 'iframe', 'height' : ${height}, 'width' : ${width}, 'params' : {} };`;
-    container.appendChild(script1);
-
-    var script2 = document.createElement("script"); 
-    script2.type = "text/javascript";
-    script2.src = `//www.highperformanceformat.com/${adKey}/invoke.js`;
-    container.appendChild(script2);
-
-    return container;
-  }
-
-  function replaceAdContainer() {
-    var adContainer = document.querySelector(".GameInfo_secondMpuContainer__xiGbJ");
-
-    if (!adContainer) {
-      adContainer = document.querySelector(".GamePageDesktop_leaderboardContainer__Mmiky");
+    function isAdServer(url) {
+      try {
+        const hostname = new URL(url, location.href).hostname;
+        if (blockedDomains.has(hostname)) return true;
+        for (const domain of blockedDomains) {
+          if (hostname === domain || hostname.endsWith(`.${domain}`)) {
+            return true;
+          }
+        }
+        return false;
+      } catch (e) {
+        return false;
+      }
     }
 
-    if (adContainer && adContainer.parentNode) {
-      adContainer.parentNode.replaceChild(
-        createAdContainer('f8b69a0d52842242af61fdbcb892cc74', 468, 60),
-        adContainer
-      );
-      console.log("Ad replaced.");
-    } else {
-      setTimeout(replaceAdContainer, 500);
-    }
-  }
+    const originalFetch = window.fetch;
+    window.fetch = function(resource, init) {
+      const url = typeof resource === 'string' ? resource : resource.url;
+      if (isAdServer(url)) {
+        return Promise.resolve(new Response(null, {
+          status: 204,
+          statusText: 'Blocked'
+        }));
+      }
+      return originalFetch.apply(this, arguments);
+    };
 
-  replaceAdContainer();
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+      if (isAdServer(url)) {
+        this.addEventListener('readystatechange', function() {
+          if (this.readyState < 4) {
+            this.abort();
+          }
+        });
+      }
+      return originalXHROpen.apply(this, arguments);
+    };
+
+    const originalSetAttribute = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function(name, value) {
+      if ((name === 'src' || name === 'href') && isAdServer(value)) {
+        return;
+      }
+      return originalSetAttribute.call(this, name, value);
+    };
+
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
+          if ((node instanceof HTMLScriptElement || node instanceof HTMLIFrameElement) && isAdServer(node.src)) {
+            node.remove();
+          }
+        });
+      });
+    });
+    observer.observe(document.documentElement || document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    console.log("Ads Blocker injected.");
+  }).catch(() => {});
 })();
