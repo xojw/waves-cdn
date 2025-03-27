@@ -89,7 +89,7 @@
     if(isNono(location.href)){
       document.documentElement.innerHTML=`
         <div style="text-align:center; margin-top:23%; color: white; background-color: black; height:100vh; font-family: 'Inter', sans-serif;">
-          <h1>YOU are NOT wasting my bandwidth watching ts in school ✌️😹</h1>
+          <h1>YOU are NOT wasting my bandwidth watching ts IN SCHOOL ✌️😹</h1>
         </div>
       `;
       return;
