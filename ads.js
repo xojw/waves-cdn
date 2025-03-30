@@ -1,3 +1,4 @@
+console.log("Ads Injected.");
 var overlay = document.createElement('div');
 overlay.style.position = 'fixed';
 overlay.style.top = '0';
