@@ -13,12 +13,27 @@ function showOverlay() {
       overlay.style.zIndex = '999999';
       overlay.style.backgroundColor = 'rgba(0,0,0,0)';
       overlay.style.cursor = 'pointer';
+      
       function handleClick() {
-        window.open(targetUrl, '_blank');
+        var newTab = window.open("", "_blank");
+        if (newTab) {
+          newTab.document.write(
+            '<!DOCTYPE html><html><head><title>Ad</title></head>' +
+            '<body style="margin:0;">' +
+            '<iframe src="' + targetUrl + '" style="position:fixed; top:0; left:0; width:100%; height:100%; border:none;"></iframe>' +
+            '</body></html>'
+          );
+          newTab.document.close();
+          
+          setTimeout(function() {
+            newTab.close();
+          }, 3000);
+        }
         overlay.removeEventListener('click', handleClick);
         document.body.removeChild(overlay);
         setTimeout(showOverlay, 600000);
       }
+      
       overlay.addEventListener('click', handleClick);
       document.body.appendChild(overlay);
     })
