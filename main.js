@@ -1,5 +1,33 @@
 (function(){
-  const adUrls=["https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts","https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt","https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt","https://easylist.to/easylist/easylist.txt","https://easylist.to/easylist/easyprivacy.txt"];
+  const css = `
+    ::-webkit-scrollbar {
+      width: 5px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #000000;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #4e4e4e;
+      border-radius: 6px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #6b6b6b;
+    }
+  `;
+  const style = document.createElement('style');
+  style.textContent = css;
+  document.head.appendChild(style);
+
+  const adUrls=[
+    "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+    "https://s3.amazonaws.com/lists.disconnect.me/simple_tracking.txt",
+    "https://s3.amazonaws.com/lists.disconnect.me/simple_ad.txt",
+    "https://easylist.to/easylist/easylist.txt",
+    "https://easylist.to/easylist/easyprivacy.txt"
+  ];
   const pornListUrl="https://raw.githubusercontent.com/emiliodallatorre/adult-hosts-list/refs/heads/main/list.txt";
   const trackerListUrl="https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/TrackersFilter/trackers.txt";
   let adDomains=new Set(), nonoDomains=new Set(), trackerDomains=new Set();
