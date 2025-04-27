@@ -165,5 +165,4 @@
     .catch(() => {});
 
   performance.setResourceTimingBufferSize(1000);
-  document.body.style.transform = 'translateZ(0)';
 })();
