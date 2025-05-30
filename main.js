@@ -3,11 +3,9 @@
     img.setAttribute('loading', 'lazy');
     if (!img.hasAttribute('decoding')) img.setAttribute('decoding', 'async');
   });
-
   document.querySelectorAll('iframe').forEach(iframe => {
     if (!iframe.hasAttribute('loading')) iframe.setAttribute('loading', 'lazy');
   });
-
   document.querySelectorAll('video').forEach(video => {
     if (!video.hasAttribute('preload')) video.setAttribute('preload', 'none');
   });
@@ -32,11 +30,25 @@
   const pornListUrl = "https://raw.githubusercontent.com/emiliodallatorre/adult-hosts-list/refs/heads/main/list.txt";
   const trackerListUrl = "https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/TrackersFilter/trackers.txt";
 
-  let adDomains = new Set(),
-      nonoDomains = new Set(),
-      trackerDomains = new Set();
+  const customDomains = [
+    'xbato.com','xbato.net','xbato.org',
+    'zbato.com','zbato.net','zbato.org',
+    'readtoto.com','readtoto.net','readtoto.org',
+    'batocomic.com','batocomic.net','batocomic.org',
+    'batotoo.com','batotwo.com','battwo.com',
+    'comiko.net','comiko.org', 'bato.to',
+    'mangatoto.com','mangatoto.net','mangatoto.org',
+    'dto.to','fto.to','jto.to','hto.to','mto.to','wto.to','bato.to',
+    'goresee.com','watchpeopledie.tv'
+  ];
 
-  const extRegex = /(\.js|\.css|\.jpg|\.png|\.gif|\.svg|\.webp|\.mp4|\.m3u8|\.json|\.ico|\.woff|\.woff2|\.ttf|\.otf|\.eot|\.xml|\.txt)$/i;
+  const customKeywords = ['gore','die','death'];
+
+  const adDomains = new Set(),
+        nonoDomains = new Set(),
+        trackerDomains = new Set();
+
+  const extRegex = /\.(js|css|jpg|png|gif|svg|webp|mp4|m3u8|json|ico|woff2?|ttf|otf|eot|xml|txt)$/i;
 
   function parseList(text, set) {
     text.split("\n").forEach(line => {
@@ -44,7 +56,11 @@
       if (!line || line.startsWith("#")) return;
       if (line.includes("#")) line = line.split("#")[0].trim();
       const parts = line.split(/\s+/);
-      let domain = parts.length === 1 ? parts[0] : /^(0\.0\.0\.0|127\.0\.0\.1)$/.test(parts[0]) ? parts[1] : parts[0];
+      let domain = parts.length === 1
+        ? parts[0]
+        : /^(0\.0\.0\.0|127\.0\.0\.1)$/.test(parts[0])
+          ? parts[1]
+          : parts[0];
       if (domain) set.add(domain);
     });
   }
@@ -58,111 +74,96 @@
     });
   }
 
+  customDomains.forEach(d => nonoDomains.add(d));
+
   Promise.all(
-    adUrls.map(url =>
-      fetch(url)
-        .then(resp => resp.text())
-        .catch(() => "")
-    )
+    adUrls.map(url => fetch(url).then(r => r.text()).catch(() => ""))
   )
-    .then(adResponses => {
-      adResponses.forEach(text => parseList(text, adDomains));
-      return Promise.all([
-        fetch(pornListUrl)
-          .then(resp => resp.text())
-          .catch(() => ""),
-        fetch(trackerListUrl)
-          .then(resp => resp.text())
-          .catch(() => "")
-      ]);
-    })
-    .then(([pornText, trackerText]) => {
-      parseSimpleList(pornText, nonoDomains);
-      parseSimpleList(trackerText, trackerDomains);
+  .then(res => {
+    res.forEach(txt => parseList(txt, adDomains));
+    return Promise.all([
+      fetch(pornListUrl).then(r => r.text()).catch(() => ""),
+      fetch(trackerListUrl).then(r => r.text()).catch(() => "")
+    ]);
+  })
+  .then(([pornTxt, trackTxt]) => {
+    parseSimpleList(pornTxt, nonoDomains);
+    parseSimpleList(trackTxt, trackerDomains);
 
-      function isBlocked(url, set) {
-        try {
-          const hostname = new URL(url, location.href).hostname;
-          if (set.has(hostname)) return true;
-          for (const domain of set) {
-            if (hostname === domain || hostname.endsWith(`.${domain}`)) return true;
+    function isBlockedByDomain(url, set) {
+      try {
+        const hostname = new URL(url, location.href).hostname;
+        if (set.has(hostname)) return true;
+        for (const d of set) {
+          if (hostname === d || hostname.endsWith(`.${d}`)) return true;
+        }
+      } catch (_) {}
+      return false;
+    }
+
+    function hasKeyword(url) {
+      const low = url.toLowerCase();
+      return customKeywords.some(k => low.includes(k));
+    }
+
+    function isBlacklisted(url) {
+      return (
+        isBlockedByDomain(url, adDomains) ||
+        isBlockedByDomain(url, trackerDomains) ||
+        isBlockedByDomain(url, nonoDomains) ||
+        hasKeyword(url)
+      );
+    }
+
+    const _fetch = window.fetch;
+    window.fetch = function(resource, init) {
+      const url = typeof resource === 'string' ? resource : resource.url;
+      if (isBlacklisted(url) && extRegex.test(url)) {
+        return Promise.resolve(new Response(null, { status: 204, statusText: 'Blocked' }));
+      }
+      return _fetch.apply(this, arguments);
+    };
+
+    const _open = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url) {
+      if (isBlacklisted(url) && extRegex.test(url)) {
+        this.addEventListener('readystatechange', function() {
+          if (this.readyState < 4) this.abort();
+        });
+      }
+      return _open.apply(this, arguments);
+    };
+
+    const _setAttr = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function(name, value) {
+      if ((name === 'src' || name === 'href') && isBlacklisted(value) && extRegex.test(value)) return;
+      return _setAttr.call(this, name, value);
+    };
+
+    const _openWin = window.open;
+    window.open = function(url, target, features, replace) {
+      if (isBlacklisted(url)) return null;
+      return _openWin.apply(this, arguments);
+    };
+
+    const observer = new MutationObserver(muts => {
+      muts.forEach(m => {
+        m.addedNodes.forEach(node => {
+          const src = node.src || node.href;
+          if ((node instanceof HTMLScriptElement || node instanceof HTMLIFrameElement) && src && isBlacklisted(src) && extRegex.test(src)) {
+            node.remove();
           }
-          return false;
-        } catch (e) {
-          return false;
-        }
-      }
-
-      function isAd(url) {
-        return isBlocked(url, adDomains);
-      }
-      function isNono(url) {
-        return isBlocked(url, nonoDomains);
-      }
-      function isTracker(url) {
-        return isBlocked(url, trackerDomains);
-      }
-
-      const origFetch = window.fetch;
-      window.fetch = function(resource, init) {
-        const url = typeof resource === "string" ? resource : resource.url;
-        if ((isAd(url) || isTracker(url)) && extRegex.test(url)) {
-          return Promise.resolve(new Response(null, { status: 204, statusText: "Blocked" }));
-        }
-        return origFetch.apply(this, arguments);
-      };
-
-      const origXHROpen = XMLHttpRequest.prototype.open;
-      XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
-        if ((isAd(url) || isTracker(url)) && extRegex.test(url)) {
-          this.addEventListener("readystatechange", function() {
-            if (this.readyState < 4) this.abort();
-          });
-        }
-        return origXHROpen.apply(this, arguments);
-      };
-
-      const origSetAttribute = Element.prototype.setAttribute;
-      Element.prototype.setAttribute = function(name, value) {
-        if ((name === "src" || name === "href") && (isAd(value) || isTracker(value)) && extRegex.test(value))
-          return;
-        return origSetAttribute.call(this, name, value);
-      };
-
-      const origWindowOpen = window.open;
-      window.open = function(url, target, features, replace) {
-        if (isAd(url) || isTracker(url)) return null;
-        return origWindowOpen.apply(this, arguments);
-      };
-
-      const observer = new MutationObserver(mutations => {
-        mutations.forEach(mutation => {
-          mutation.addedNodes.forEach(node => {
-            if (
-              (node instanceof HTMLScriptElement || node instanceof HTMLIFrameElement) &&
-              (isAd(node.src) || isTracker(node.src)) &&
-              extRegex.test(node.src)
-            ) {
-              node.remove();
-            }
-          });
         });
       });
-      observer.observe(document.documentElement || document.body, {
-        childList: true,
-        subtree: true
-      });
+    });
+    observer.observe(document.documentElement || document.body, { childList: true, subtree: true });
 
-      if (isNono(location.href)) {
-        document.documentElement.innerHTML = `
-          <div style="text-align:center; margin-top:23%; color:white; background-color:black; height:100vh; font-family:'Inter',sans-serif;">
-            <h1>YOU are NOT wasting my bandwidth watching ts ✌️😹</h1>
-          </div>
-        `;
-        return;
-      }
-    })
-    .catch(() => {});
+    if (isBlacklisted(location.href)) {
+      document.documentElement.innerHTML = `<div style="text-align:center;margin-top:23%;color:white;background:black;height:100vh;font-family:'Inter',sans-serif;">
+        <h1>Your're fucking weird yo 😹</h1></div>`;
+    }
+  })
+  .catch(() => {});
 
   performance.setResourceTimingBufferSize(1000);
 })();
