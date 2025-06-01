@@ -327,7 +327,6 @@
     })
     .catch(() => {
     });
-
   performance.setResourceTimingBufferSize(1000);
 })();
 (function(){
